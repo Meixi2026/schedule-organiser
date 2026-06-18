@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { Mic, Loader2 } from 'lucide-react';
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
@@ -25,7 +26,11 @@ declare global {
 interface Props {
   onAdd: (input: string, isDDL: boolean) => void;
   adding: boolean;
+  onExampleClick?: (text: string) => void;
 }
+
+const SCHEDULE_EXAMPLE = '明天下午3点在公司开会，记得提醒';
+const DDL_EXAMPLE = '论文 6月15日 截止，记得提醒';
 
 export default function ScheduleInput({ onAdd, adding }: Props) {
   const [input, setInput] = useState('');
@@ -85,18 +90,39 @@ export default function ScheduleInput({ onAdd, adding }: Props) {
     }
   };
 
+  const applyExample = () => {
+    setInput(mode === 'ddl' ? DDL_EXAMPLE : SCHEDULE_EXAMPLE);
+  };
+
   return (
     <div className="input-section">
+      <div className="input-mode-tabs">
+        <button
+          type="button"
+          className={`input-mode-tab ${mode === 'schedule' ? 'active' : ''}`}
+          onClick={() => setMode('schedule')}
+        >
+          日程
+        </button>
+        <button
+          type="button"
+          className={`input-mode-tab ddl ${mode === 'ddl' ? 'active' : ''}`}
+          onClick={() => setMode('ddl')}
+        >
+          DDL 规划
+        </button>
+      </div>
+
       <div className="input-wrapper">
         {voiceSupported && (
           <button
+            type="button"
             className={`voice-btn ${listening ? 'listening' : ''}`}
             onClick={toggleVoice}
             disabled={adding}
             title={listening ? '停止语音输入' : '语音输入'}
-            type="button"
           >
-            {listening ? '●' : '🎤'}
+            <Mic size={16} strokeWidth={2} />
           </button>
         )}
         <textarea
@@ -112,29 +138,25 @@ export default function ScheduleInput({ onAdd, adding }: Props) {
           rows={1}
         />
         <button
+          type="button"
           className="add-btn"
           onClick={handleSubmit}
           disabled={!input.trim() || adding}
         >
-          {adding ? '...' : mode === 'ddl' ? '规划' : '添加'}
+          {adding ? (
+            <Loader2 size={14} className="spin" strokeWidth={2.5} />
+          ) : mode === 'ddl' ? (
+            '规划'
+          ) : (
+            '添加'
+          )}
         </button>
       </div>
       <div className="input-hints">
-        <button
-          className={`hint-tag ${mode === 'schedule' ? 'active' : ''}`}
-          onClick={() => setMode('schedule')}
-          style={mode === 'schedule' ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : {}}
-        >
-          日程
-        </button>
-        <button
-          className={`hint-tag ${mode === 'ddl' ? 'active' : ''}`}
-          onClick={() => setMode('ddl')}
-          style={mode === 'ddl' ? { background: 'var(--warm-soft)', color: 'var(--warm)' } : {}}
-        >
-          DDL 规划
-        </button>
         <span className="hint-tag">说「提醒」= 重要事项</span>
+        <button type="button" className="hint-tag hint-example" onClick={applyExample}>
+          试试示例
+        </button>
       </div>
     </div>
   );

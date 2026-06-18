@@ -21,7 +21,7 @@
 ## 开发
 
 ```bash
-cd "/Users/meixibenwangdechuangyikongjian/Desktop/schedule- organiser"
+cd "/Users/meixibenwangdechuangyikongjian/Desktop/schedule-organiser"
 npm install                  # 首次或依赖变更后
 bash scripts/install-electron.sh   # macOS 若 Electron 启动失败
 npm run dev                  # 开发模式（热更新）

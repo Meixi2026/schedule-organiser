@@ -6,7 +6,7 @@
   "main": "dist-electron/main/main.js",
   "scripts": {
     "dev": "npm run build:electron && concurrently -k \"vite --strictPort --port 5173\" \"wait-on http://localhost:5173 && env -u ELECTRON_RUN_AS_NODE electron .\"",
-    "stop": "pkill -f \"schedule- organiser.*(vite|electron \\.)\" || true",
+    "stop": "pkill -f \"schedule-organiser.*(vite|electron \\.)\" || true",
     "build:electron": "tsc -p tsconfig.electron.json",
     "postinstall": "bash scripts/install-electron.sh 2>/dev/null || node node_modules/electron/install.js",
     "build": "vite build && tsc -p tsconfig.electron.json",
@@ -16,6 +16,7 @@
   "dependencies": {
     "date-fns": "^3.6.0",
     "electron-store": "^8.2.0",
+    "lucide-react": "^1.18.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

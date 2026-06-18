@@ -35,7 +35,7 @@
 ## 目录结构
 
 ```
-schedule- organiser/
+schedule-organiser/
 ├── main/                   # Electron 主进程（勿命名为 electron/，会与 npm 包冲突）
 │   ├── main.ts             # 窗口、托盘、IPC、单实例、关闭逻辑
 │   ├── preload.ts          # contextBridge → window.electronAPI

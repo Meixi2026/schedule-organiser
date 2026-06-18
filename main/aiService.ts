@@ -44,6 +44,71 @@ function today(): string {
   return localDateStr();
 }
 
+const WEEKDAY_TO_DOW: Record<string, number> = {
+  日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6,
+};
+
+function startOfLocalDay(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function mondayOfWeek(d: Date): Date {
+  const date = startOfLocalDay(d);
+  const dow = date.getDay();
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  date.setDate(date.getDate() - daysFromMonday);
+  return date;
+}
+
+function parseWeekdayFromText(text: string): string | undefined {
+  const prefixed = text.match(/(下下周|下周|本周|这周)([一二三四五六日天])/);
+  const bare = !prefixed ? text.match(/(?:周|星期)([一二三四五六日天])/) : null;
+  const prefix = prefixed?.[1] || '';
+  const dayChar = prefixed?.[2] || bare?.[1];
+  if (!dayChar) return undefined;
+
+  const targetDow = WEEKDAY_TO_DOW[dayChar];
+  const now = startOfLocalDay(new Date());
+  const currentDow = now.getDay();
+  const offsetFromMonday = targetDow === 0 ? 6 : targetDow - 1;
+
+  if (prefix === '下下周') {
+    const monday = mondayOfWeek(now);
+    monday.setDate(monday.getDate() + 14 + offsetFromMonday);
+    return localDateStr(monday);
+  }
+  if (prefix === '下周') {
+    const monday = mondayOfWeek(now);
+    monday.setDate(monday.getDate() + 7 + offsetFromMonday);
+    return localDateStr(monday);
+  }
+  if (prefix === '本周' || prefix === '这周') {
+    const monday = mondayOfWeek(now);
+    monday.setDate(monday.getDate() + offsetFromMonday);
+    return localDateStr(monday);
+  }
+
+  const daysAhead = (targetDow - currentDow + 7) % 7;
+  const target = new Date(now);
+  target.setDate(target.getDate() + daysAhead);
+  return localDateStr(target);
+}
+
+const WEEKDAY_TEXT_PATTERN =
+  /下下周[一二三四五六日天]|下周[一二三四五六日天]|(?:本周|这周)[一二三四五六日天]|(?:周|星期)[一二三四五六日天]/g;
+
+function cleanLocalTitle(input: string): string {
+  return input
+    .replace(/提醒|记得|别忘了|重要|务必|一定|特别/g, '')
+    .replace(WEEKDAY_TEXT_PATTERN, '')
+    .replace(/\d{1,2}[:：]\d{2}/g, '')
+    .replace(/\d{1,2}[点时](?:半)?/g, '')
+    .replace(/今天|今日|明天|明日|后天/g, '')
+    .trim();
+}
+
 function parseDateFromText(text: string): string {
   const now = new Date();
   if (/今天|今日/.test(text)) return today();
@@ -57,6 +122,8 @@ function parseDateFromText(text: string): string {
     d.setDate(d.getDate() + 2);
     return localDateStr(d);
   }
+  const weekdayDate = parseWeekdayFromText(text);
+  if (weekdayDate) return weekdayDate;
   const match = text.match(/(\d{1,2})月(\d{1,2})[日号]?/);
   if (match) {
     const month = parseInt(match[1], 10);
@@ -102,7 +169,7 @@ function needsReminderFromText(text: string): boolean {
 function localParse(input: string): ParsedInput {
   const isDeadline = /DDL|截止|deadline|交|提交|due/i.test(input);
   return {
-    title: input.replace(/提醒|记得|别忘了|重要|务必|一定|特别/g, '').trim(),
+    title: cleanLocalTitle(input) || input.trim(),
     date: parseDateFromText(input),
     time: parseTimeFromText(input),
     location: parseLocationFromText(input),

@@ -42,6 +42,7 @@ export interface AppData {
   companionMessage?: CompanionMessage;
   apiKey?: string;
   isHidden: boolean;
+  companionCollapsed?: boolean;
 }
 
 export interface ParsedInput {

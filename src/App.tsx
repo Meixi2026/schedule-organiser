@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
+import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { ScheduleItem, AppData, CompanionMessage, ParsedInput } from './types';
 import TitleBar from './components/TitleBar';
 import CompanionCard from './components/CompanionCard';
 import ScheduleInput from './components/ScheduleInput';
 import ScheduleList from './components/ScheduleList';
-import SettingsPanel from './components/SettingsPanel';
+import SettingsModal from './components/SettingsModal';
+import WeekStrip from './components/WeekStrip';
 
-type FilterTab = 'all' | 'today' | 'important' | 'ddl';
+type FilterTab = 'all' | 'today' | 'reminder' | 'ddl';
 
 function formatDateLabel(dateStr: string): string {
   const date = parseISO(dateStr);
@@ -37,9 +38,11 @@ export default function App() {
   const [companionMessage, setCompanionMessage] = useState<CompanionMessage | undefined>();
   const [apiKey, setApiKey] = useState('');
   const [isHidden, setIsHidden] = useState(false);
+  const [companionCollapsed, setCompanionCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<FilterTab>('all');
+  const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -56,6 +59,7 @@ export default function App() {
       setCompanionMessage(data.companionMessage);
       setApiKey(data.apiKey || '');
       setIsHidden(data.isHidden || false);
+      setCompanionCollapsed(data.companionCollapsed ?? false);
       setLoading(false);
 
       if (shouldRegenerateCompanion(data.companionMessage)) {
@@ -88,6 +92,7 @@ export default function App() {
     if (updated.schedules) setSchedules(updated.schedules);
     if (updated.companionMessage) setCompanionMessage(updated.companionMessage);
     if (updated.apiKey !== undefined) setApiKey(updated.apiKey);
+    if (updated.companionCollapsed !== undefined) setCompanionCollapsed(updated.companionCollapsed);
   }, [isElectron]);
 
   const regenerateCompanion = async (items: ScheduleItem[], key: string) => {
@@ -192,14 +197,42 @@ export default function App() {
     await save({ apiKey: key });
   };
 
+  const handleToggleCompanionCollapse = async () => {
+    const next = !companionCollapsed;
+    setCompanionCollapsed(next);
+    await save({ companionCollapsed: next });
+  };
+
+  const handleWeekSelect = (dateStr: string) => {
+    setDateFilter((prev) => (prev === dateStr ? null : dateStr));
+    if (dateFilter !== dateStr) setFilter('all');
+  };
+
+  const filterCounts = {
+    all: schedules.filter((s) => !s.completed).length,
+    today: schedules.filter((s) => !s.completed && isToday(parseISO(s.date))).length,
+    reminder: schedules.filter((s) => !s.completed && s.needsReminder).length,
+    ddl: schedules.filter((s) => !s.completed && s.isDeadline).length,
+  };
+
   const filtered = schedules.filter((s) => {
+    if (s.completed) return false;
+    if (dateFilter && s.date !== dateFilter) return false;
     if (filter === 'today') return isToday(parseISO(s.date));
-    if (filter === 'important') return s.needsReminder;
+    if (filter === 'reminder') return s.needsReminder;
     if (filter === 'ddl') return s.isDeadline;
     return true;
   });
 
+  const completedItems = schedules.filter((s) => s.completed);
+
   const sorted = [...filtered].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return (a.time || '').localeCompare(b.time || '');
+  });
+
+  const sortedCompleted = [...completedItems].sort((a, b) => {
     const dateCompare = a.date.localeCompare(b.date);
     if (dateCompare !== 0) return dateCompare;
     return (a.time || '').localeCompare(b.time || '');
@@ -217,16 +250,23 @@ export default function App() {
     <div className="app">
       <TitleBar
         isHidden={isHidden}
-        onToggleSettings={() => setShowSettings(!showSettings)}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <div className="content">
-        {companionMessage && (
-          <CompanionCard message={companionMessage.text} />
-        )}
+        <WeekStrip
+          schedules={schedules}
+          selectedDate={dateFilter}
+          onSelectDate={handleWeekSelect}
+        />
 
-        {showSettings && (
-          <SettingsPanel apiKey={apiKey} onSave={handleSaveApiKey} />
+        {companionMessage && (
+          <CompanionCard
+            message={companionMessage.text}
+            companionMeta={companionMessage}
+            collapsed={companionCollapsed}
+            onToggleCollapse={handleToggleCompanionCollapse}
+          />
         )}
 
         <ScheduleInput onAdd={handleAdd} adding={adding} />
@@ -235,31 +275,49 @@ export default function App() {
           {([
             ['all', '全部'],
             ['today', '今天'],
-            ['important', '重要'],
+            ['reminder', '提醒'],
             ['ddl', 'DDL'],
           ] as [FilterTab, string][]).map(([key, label]) => (
             <button
               key={key}
+              type="button"
               className={`filter-tab ${filter === key ? 'active' : ''}`}
-              onClick={() => setFilter(key)}
+              onClick={() => {
+                setFilter(key);
+                setDateFilter(null);
+              }}
             >
               {label}
+              {filterCounts[key] > 0 && (
+                <span className="filter-tab-count">{filterCounts[key]}</span>
+              )}
             </button>
           ))}
         </div>
 
         <ScheduleList
           items={sorted}
+          completedItems={sortedCompleted}
           formatDateLabel={formatDateLabel}
           onToggleComplete={handleToggleComplete}
           onToggleSubTaskComplete={handleToggleSubTaskComplete}
           onToggleReminder={handleToggleReminder}
           onDelete={handleDelete}
+          onExampleClick={(text) => handleAdd(text, false)}
         />
       </div>
+
+      {showSettings && (
+        <SettingsModal
+          apiKey={apiKey}
+          onSave={handleSaveApiKey}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
 
-export { formatDateLabel, isPast };
+export { formatDateLabel };
